@@ -11,3 +11,32 @@ project/plugins/project/
 
 # Scala-IDE specific
 .scala_dependencies
+
+project/project
+project/target
+target
+.target
+.directory
+.classpath
+.project
+.idea
+.settings
+tmp
+.history
+dist
+/.idea
+/*.iml
+/out
+/.idea_modules
+/.classpath
+/.project
+/RUNNING_PID
+/.settings
+/.target
+*.class
+/*.class
+bin
+/bin
+/.settings
+.settings
+
