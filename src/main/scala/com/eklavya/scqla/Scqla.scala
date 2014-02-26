@@ -1,11 +1,11 @@
 package com.eklavya.scqla
 
-import scala.concurrent.{Future, Await, Promise}
+import scala.concurrent.{ Future, Await, Promise }
 import Header._
-import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.actor.{ ActorRef, ActorSystem, Props }
 import akka.util.ByteStringBuilder
 import akka.util._
-import java.util.{UUID => uu}
+import java.util.{ UUID => uu }
 import java.net.InetAddress
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -29,41 +29,29 @@ object Scqla {
     Await.result(receiver ? ShallWeStart, 8 seconds)
   }
 
-  def query[T <: ResultResponse : ClassTag](q: String): Future[T] = {
-    (client ? Query(q)).mapTo[T]
-  }
-
-  def queryAs[T: ClassTag](q: String) = {
-
+  private[this] def rowsToClass[T: ClassTag](rr: ResultRows) = {
     val claas = implicitly[ClassTag[T]].runtimeClass
-
-    query[ResultRows](q).map { rr =>
-
-      if (claas.isPrimitive)  {
-        rr.l.map(_.flatten.head.asInstanceOf[T])
-      }
-
-      else if (claas.getName.equals("java.lang.String")) {
-        rr.l.map(_.flatten.head)
-      }
-
-      else {
-        rr.l.map { l =>
-          val params = l.flatten
-          claas.getConstructors()(0).newInstance(params map { _.asInstanceOf[AnyRef] } : _*).asInstanceOf[T]
-        }
+    if (claas.isPrimitive) {
+      rr.l.map(_.flatten.head.asInstanceOf[T])
+    } else if (claas.getName.equals("java.lang.String")) {
+      rr.l.map(_.flatten.head)
+    } else {
+      rr.l.map { l =>
+        val params = l.flatten
+        claas.getConstructors()(0).newInstance(params map { _.asInstanceOf[AnyRef] }: _*).asInstanceOf[T]
       }
     }
   }
 
-  def prepare(q: String) = {
-    println("Preapreing query to be sent.")
-    (client ? Prepare(q)).mapTo[Prepared]
-  }
+  def query[T <: ResultResponse: ClassTag](q: String): Future[T] = (client ? Query(q)).mapTo[T]
 
-  def execute(bs: ByteString) = {
-    (client ? Execute(bs)).mapTo[Successful.type]
-  }
+  def queryAs[T: ClassTag](q: String) = query[ResultRows](q).map(rowsToClass[T](_))
+
+  def prepare(q: String) = (client ? Prepare(q)).mapTo[Prepared]
+
+  def execute(bs: ByteString) = (client ? Execute(bs)).mapTo[Successful.type]
+
+  def executeGet[T: ClassTag](bs: ByteString) = (client ? Execute(bs)).mapTo[ResultRows].map(rowsToClass[T](_))
 
   def getOpt(it: ByteIterator): Array[Short] = {
     val opt = it.getShort
@@ -75,9 +63,9 @@ object Scqla {
         Array(opt) ++ s.toArray.map(_.toShort)
 
       case ASCII | BIGINT | BLOB | BOOLEAN |
-           COUNTER | DECIMAL | DOUBLE | FLOAT |
-           INT | TEXT | TIMESTAMP | UUID |
-           VARCHAR | VARINT | TIMEUUID | INET => Array(opt)
+        COUNTER | DECIMAL | DOUBLE | FLOAT |
+        INT | TEXT | TIMESTAMP | UUID |
+        VARCHAR | VARINT | TIMEUUID | INET => Array(opt)
 
       case LIST =>
         val id = it.getShort
@@ -156,17 +144,22 @@ abstract class Response
 
 case class Prepared(qid: ByteString, cols: Vector[(String, Array[Short])]) extends Response {
 
-  def execute(params: Any*) = {
+  private def buildBS(params: Any*) = {
     val builder = new ByteStringBuilder
     builder.putShort(qid.length)
     builder.append(qid).putShort(cols.length)
     if (params.length == cols.size) {
-      (params zip cols) foreach { case (param, option) =>
-        writeType(option._2(0), param, builder)
+      (params zip cols) foreach {
+        case (param, option) =>
+          writeType(option._2(0), param, builder)
       }
     }
-    Scqla.execute(builder.result)
+    builder.result
   }
+
+  def execute(params: Any*) = Scqla.execute(buildBS(params: _*))
+
+  def executeGet[T: ClassTag](params: Any*) = Scqla.executeGet[T](buildBS(params: _*))
 
   def insert[A](a: A) = {
 
