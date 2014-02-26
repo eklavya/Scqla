@@ -1,6 +1,6 @@
 import com.eklavya.scqla._
 import org.omg.PortableInterceptor.SUCCESSFUL
-import org.scalatest.{Matchers, BeforeAndAfterAll, FlatSpec}
+import org.scalatest.{ Matchers, BeforeAndAfterAll, FlatSpec }
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
@@ -8,9 +8,9 @@ import scala.concurrent.duration._
  * Created by eklavya on 18/2/14.
  */
 
-class QuerySpec extends FlatSpec with BeforeAndAfterAll with Matchers {
+case class Emp(empId: Int, deptId: Int, first: String, last: String)
 
-  case class Emp(empId: Int, deptId: Int, first: String, last: String)
+class QuerySpec extends FlatSpec with BeforeAndAfterAll with Matchers {
 
   override def beforeAll {
     Scqla.connect
@@ -22,8 +22,9 @@ class QuerySpec extends FlatSpec with BeforeAndAfterAll with Matchers {
   }
 
   "Driver" should "return proper case class list" in {
-    Scqla.queryAs[Emp]("select * from emp").foreach { l =>
-      l.foreach(_.isInstanceOf[Emp] should be(true))
+    val res = Await.result(Scqla.queryAs[Emp]("select * from emp"), 5 seconds)
+    res.foreach { l =>
+      l.isInstanceOf[Emp] should be(true)
     }
   }
 
@@ -41,7 +42,15 @@ class QuerySpec extends FlatSpec with BeforeAndAfterAll with Matchers {
 
   "Driver" should "be able to execute prepared queries" in {
     val res = Await.result(Scqla.prepare("update emp set last_name = ? where empid = ? and deptid = ?"), 5 seconds)
-    val res1 = Await.result(res.execute("Parwal", 105, 16), 5 seconds)
+    val res1 = Await.result(res.execute("Parwal", 101, 16), 5 seconds)
     res1.isInstanceOf[Successful.type] should be(true)
+  }
+
+  "Driver" should "be able to execute prepared queries and get results" in {
+    val res = Await.result(Scqla.prepare("select * from emp where empid = ? and deptid = ?"), 5 seconds)
+    val res1 = Await.result(res.executeGet[Emp](105, 16), 5 seconds)
+    res1.foreach { r =>
+    	r.isInstanceOf[Emp] should be(true)
+    }
   }
 }
