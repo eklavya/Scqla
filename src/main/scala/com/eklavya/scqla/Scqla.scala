@@ -12,21 +12,43 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import Frame._
 import akka.pattern.ask
 import scala.reflect.ClassTag
+import com.typesafe.config._
+import akka.routing.FromConfig
+import akka.routing.RoundRobinRouter
 
 object Scqla {
-  val VERSION: Byte = 0x01
-  val FLAGS: Byte = 0x00
+
+  val cnfg = ConfigFactory.load
+
+  val nodes = cnfg.getStringList("nodes")
+
+  val port = cnfg.getInt("port")
+
+  val numNodes = cnfg.getInt("nodesToConnect")
+
   val system = ActorSystem("Scqla")
-  val consistency = ANY
+
+  val numConnections = if (nodes.size > numNodes) numNodes else nodes.size
+
+  val actors = (0 until numConnections).map { i =>
+    val receiver = system.actorOf(Props[Receiver], s"receiver$i")
+    println(s"made a receiver with ref $receiver and name receiver$i")
+    val client = system.actorOf(Props(new Sender(receiver, nodes.get(i), port)), s"sender$i")
+    s"/user/sender$i"
+  }
+
+  val router = system.actorOf(Props.empty.withRouter(RoundRobinRouter(routees = actors)), "router")
+
   implicit val byteOrder = java.nio.ByteOrder.BIG_ENDIAN
 
   implicit val timeout = Timeout(10 seconds)
 
-  val receiver = system.actorOf(Props[Receiver])
-  val client = system.actorOf(Props(new Sender(receiver)))
-  
   def connect = {
-    Await.result(receiver ? ShallWeStart, 8 seconds)
+    (0 until numConnections).map { i =>
+      println(s"asking receiver $i")
+      val res = Await.result(system.actorFor(s"/user/receiver$i") ? ShallWeStart, 8 seconds)
+      println(s"received confirmation $res")
+    }
   }
 
   private[this] def rowsToClass[T: ClassTag](rr: ResultRows) = {
@@ -43,15 +65,15 @@ object Scqla {
     }
   }
 
-  def query[T <: ResultResponse: ClassTag](q: String): Future[T] = (client ? Query(q)).mapTo[T]
+  def query[T <: ResultResponse: ClassTag](q: String): Future[T] = (router ? Query(q)).mapTo[T]
 
   def queryAs[T: ClassTag](q: String) = query[ResultRows](q).map(rowsToClass[T](_))
 
-  def prepare(q: String) = (client ? Prepare(q)).mapTo[Prepared]
+  def prepare(q: String) = (router ? Prepare(q)).mapTo[Prepared]
 
-  def execute(bs: ByteString) = (client ? Execute(bs)).mapTo[Successful.type]
+  def execute(bs: ByteString) = (router ? Execute(bs)).mapTo[Successful.type]
 
-  def executeGet[T: ClassTag](bs: ByteString) = (client ? Execute(bs)).mapTo[ResultRows].map(rowsToClass[T](_))
+  def executeGet[T: ClassTag](bs: ByteString) = (router ? Execute(bs)).mapTo[ResultRows].map(rowsToClass[T](_))
 
   def getOpt(it: ByteIterator): Array[Short] = {
     val opt = it.getShort
@@ -122,14 +144,14 @@ object Scqla {
       }
     }
   }
-  
-  def register(w: DBEvent) =  w match {
+
+  def register(w: DBEvent) = w match {
     case _: TopologyEvent =>
     case _: StatusEvent =>
     case _: SchemaEvent =>
   }
-  
-  def unRegister(w: DBEvent) =  w match {
+
+  def unRegister(w: DBEvent) = w match {
     case _: TopologyEvent =>
     case _: StatusEvent =>
     case _: SchemaEvent =>
