@@ -1,9 +1,9 @@
 package com.eklavya.scqla
 
-import akka.actor.{ActorRef, Actor}
+import akka.actor.{ ActorRef, Actor }
 import com.eklavya.scqla.Header._
 import akka.io.Tcp._
-import akka.util.{ByteString, ByteStringBuilder}
+import akka.util.{ ByteString, ByteStringBuilder }
 import Scqla._
 import Frame._
 import scala.collection.mutable.Map
@@ -23,7 +23,6 @@ class Receiver extends Actor {
   def receive = {
     case ShallWeStart =>
       scqla = sender
-
 
     case x: Connected =>
       sndr = sender
@@ -47,6 +46,7 @@ class Receiver extends Actor {
               b.drop(4)
               println(s"Error Code: ${b.getInt}")
               println(readString(b))
+              sndr ! FullFilled(stream)
 
             //READY
             case 0x02 =>
@@ -57,12 +57,14 @@ class Receiver extends Actor {
             //AUTHENTICATE
             case 0x03 =>
               println("Authentication required. Authenticating ...")
-              //send from conf
+              sndr ! FullFilled(stream)
+            //send from conf
 
             //SUPPORTED
             case 0x06 =>
               val len = b.getInt
               println(readMultiMap(b))
+              sndr ! FullFilled(stream)
 
             //RESULT
             case 0x08 =>
@@ -89,12 +91,14 @@ class Receiver extends Actor {
                   sndr ! FullFilled(stream)
 
                 case SCHEMA_CHANGE =>
+                  fullFillMap(stream) ! SchemaChange
                   println(s"${readString(b)} ${readString(b)} ${readString(b)}")
-
+                  sndr ! FullFilled(stream)
               }
 
             //EVENT
             case 0x0C =>
+              sndr ! FullFilled(stream)
           }
         }
       }
