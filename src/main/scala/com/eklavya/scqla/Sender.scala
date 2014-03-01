@@ -8,6 +8,7 @@ import akka.io.Tcp._
 import Frame._
 import Header._
 import Scqla._
+import com.typesafe.config._
 
 /**
  * Created by eklavya on 8/2/14.
@@ -15,13 +16,13 @@ import Scqla._
 
 case object NotUp
 
-class Sender(receiver: ActorRef) extends Actor {
+class Sender(receiver: ActorRef, host: String, port: Int) extends Actor {
   
   val streams = Array.fill[Boolean](128)(true)
 
   def getStream = streams.indexWhere(_ == true).toByte
-
-  val remote = new InetSocketAddress("127.0.0.1", 9042)
+  
+  val remote = new InetSocketAddress(host, port)
 
   var connHandle: ActorRef = _
 
