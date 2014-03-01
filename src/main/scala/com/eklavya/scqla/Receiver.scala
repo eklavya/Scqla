@@ -16,6 +16,9 @@ class Receiver extends Actor {
   implicit val sys = context.system
 
   val fullFillMap = Map.empty[Byte, ActorRef]
+  
+  // in case we are already connected and yet to be asked for confirmation
+  var connected = false
 
   var sndr: ActorRef = null
   var scqla: ActorRef = null
@@ -30,6 +33,7 @@ class Receiver extends Actor {
 
         case ShallWeStart =>
           scqla = sender
+          if (connected) scqla ! Start
 
         case FullFill(stream, actor) =>
           fullFillMap += (stream -> actor)
@@ -50,8 +54,9 @@ class Receiver extends Actor {
 
             //READY
             case 0x02 =>
-              println("Server is ready.")
-              scqla ! Start
+              println(s"Server is ready. from receiver $self")
+              connected = true
+              if (scqla != null) scqla ! Start
               sndr ! FullFilled(stream)
 
             //AUTHENTICATE
