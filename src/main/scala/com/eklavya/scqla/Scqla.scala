@@ -32,7 +32,6 @@ object Scqla {
 
   val actors = (0 until numConnections).map { i =>
     val receiver = system.actorOf(Props[Receiver], s"receiver$i")
-    println(s"made a receiver with ref $receiver and name receiver$i")
     val client = system.actorOf(Props(new Sender(receiver, nodes.get(i), port)), s"sender$i")
     s"/user/sender$i"
   }
@@ -45,9 +44,7 @@ object Scqla {
 
   def connect = {
     (0 until numConnections).map { i =>
-      println(s"asking receiver $i")
       val res = Await.result(system.actorFor(s"/user/receiver$i") ? ShallWeStart, 8 seconds)
-      println(s"received confirmation $res")
     }
   }
 
