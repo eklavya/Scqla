@@ -63,9 +63,9 @@ object Frame {
 
       case ASCII | TEXT | VARCHAR => readBytes(it).map(_.utf8String)
 
-      case BIGINT | VARINT => readBytes(it).map(bs => BigInt(bs.toArray))
+      case BIGINT | VARINT => readBytes(it).map(_.iterator.getLong)
 
-      case BOOLEAN => readBytes(it).map(bs => if (bs.iterator.getByte == 0x00) false else true)
+      case BOOLEAN => readBytes(it).map(bs => if (bs.iterator.getByte == 0) false else true)
 
       case TIMESTAMP | COUNTER => readBytes(it).map(_.utf8String.toLong)
 
@@ -77,7 +77,7 @@ object Frame {
 
       case INT => readBytes(it).map(_.iterator.getInt)
 
-      case UUID | TIMEUUID => readBytes(it).map(bs => uu.fromString(bs.utf8String))
+      case UUID | TIMEUUID => readBytes(it).map(bs => new uu(bs.iterator.getLong, bs.iterator.getLong))
 
       case INET => readBytes(it).map { bs =>
         val it = bs.iterator
@@ -115,21 +115,23 @@ object Frame {
 
       case ASCII | TEXT | VARCHAR => val b = ByteString(param.asInstanceOf[String]);builder.putInt(b.length).append(b)
 
-      case BIGINT | VARINT => builder.append(writeBytes(param.asInstanceOf[BigInt].toByteArray))
+      case BIGINT | VARINT => builder.putInt(8).putLong(param.asInstanceOf[Long])
 
-      case BOOLEAN =>
+      case BOOLEAN => builder.putInt(1).putByte({if (param.asInstanceOf[Boolean]) 1 else 0})
 
       case TIMESTAMP | COUNTER => builder.append(writeBytes(param.toString.toCharArray.map(_.toByte)))
 
       case DECIMAL => builder.append(writeBytes(param.toString.toCharArray.map(_.toByte)))
 
-      case DOUBLE => builder.append(writeBytes(param.asInstanceOf[Double].toString.toCharArray.map(_.toByte)))
+      case DOUBLE => builder.putInt(8).putDouble(param.asInstanceOf[Double])//append(writeBytes(param.asInstanceOf[Double].toString.toCharArray.map(_.toByte)))
 
       case FLOAT => builder.append(writeBytes(param.asInstanceOf[Float].toString.toCharArray.map(_.toByte)))
 
       case INT => builder.putInt(4).putInt(param.asInstanceOf[Int])
 
-      case UUID | TIMEUUID => builder.append(writeBytes(param.asInstanceOf[uu].toString.toCharArray.map(_.toByte)))
+      case UUID | TIMEUUID =>
+        val uuid = param.asInstanceOf[uu]
+        builder.putInt(16).putLong(uuid.getMostSignificantBits).putLong(uuid.getMostSignificantBits)
 
     }
   }
