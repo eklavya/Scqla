@@ -24,7 +24,7 @@ object Scqla {
 
   val receiver = system.actorOf(Props[Receiver])
   val client = system.actorOf(Props(new Sender(receiver)))
-
+  
   def connect = {
     Await.result(receiver ? ShallWeStart, 8 seconds)
   }
@@ -122,6 +122,36 @@ object Scqla {
       }
     }
   }
+  
+  def register(w: DBEvent) =  w match {
+    case _: TopologyEvent =>
+    case _: StatusEvent =>
+    case _: SchemaEvent =>
+  }
+  
+  def unRegister(w: DBEvent) =  w match {
+    case _: TopologyEvent =>
+    case _: StatusEvent =>
+    case _: SchemaEvent =>
+  }
+}
+
+trait DBEvent
+
+trait TopologyEvent extends DBEvent {
+  def onNewNode(i: InetAddress): Unit
+  def onRemovedNode(i: InetAddress): Unit
+}
+
+trait StatusEvent extends DBEvent {
+  def onNodeUp(i: InetAddress): Unit
+  def onNodeDown(i: InetAddress): Unit
+}
+
+trait SchemaEvent extends DBEvent {
+  def onCreated(ks: String, table: String): Unit
+  def onUpdated(ks: String, table: String): Unit
+  def onDropped(ks: String, table: String): Unit
 }
 
 case class FullFill(stream: Byte, actor: ActorRef)
@@ -175,4 +205,5 @@ case class Supported extends Response
 case class ResultRows(l: IndexedSeq[IndexedSeq[Option[Any]]]) extends ResultResponse
 case object Successful extends ResultResponse
 case object SetKeyspace extends ResultResponse
+case object SchemaChange extends ResultResponse
 case class Event extends Response
