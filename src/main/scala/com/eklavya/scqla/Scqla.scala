@@ -48,12 +48,12 @@ object Scqla {
     }
   }
 
-  private[this] def rowsToClass[T: ClassTag](rr: ResultRows) = {
+  private[this] def rowsToClass[T: ClassTag](rr: ResultRows): IndexedSeq[T] = {
     val claas = implicitly[ClassTag[T]].runtimeClass
     if (claas.isPrimitive) {
       rr.l.map(_.flatten.head.asInstanceOf[T])
     } else if (claas.getName.equals("java.lang.String")) {
-      rr.l.map(_.flatten.head)
+      rr.l.map(_.flatten.head.asInstanceOf[T])
     } else {
       rr.l.map { l =>
         val params = l.flatten
@@ -62,15 +62,30 @@ object Scqla {
     }
   }
 
-  def query[T <: ResultResponse: ClassTag](q: String): Future[T] = (router ? Query(q)).mapTo[T]
+  def query(q: String)(implicit tag: ClassTag[Response]): Future[Either[String, Response]] = (router ? Query(q)).map {
+    case e: Error => Left(e.e)
+    case x: Response => Right(x)
+  }
 
-  def queryAs[T: ClassTag](q: String) = query[ResultRows](q).map(rowsToClass[T](_))
+  def queryAs[T: ClassTag](q: String): Future[Either[String, IndexedSeq[T]]] = query(q).map(_.fold(
+  	error => Left(error),
+    valid => Right(rowsToClass[T](valid.asInstanceOf[ResultRows]))
+  ))
 
-  def prepare(q: String) = (router ? Prepare(q)).mapTo[Prepared]
+  def prepare(q: String): Future[Either[String, Prepared]] = (router ? Prepare(q)).map {
+    case p: Prepared => Right(p)
+    case e: Error => Left(e.e)
+  }
 
-  def execute(bs: ByteString) = (router ? Execute(bs)).mapTo[Successful.type]
+  def execute(bs: ByteString): Future[Either[String, Response]] = (router ? Execute(bs)).map {
+    case e: Error => Left(e.e)
+    case x: Response => Right(x)
+  }
 
-  def executeGet[T: ClassTag](bs: ByteString) = (router ? Execute(bs)).mapTo[ResultRows].map(rowsToClass[T](_))
+  def executeGet[T: ClassTag](bs: ByteString): Future[Either[String, IndexedSeq[T]]] = (router ? Execute(bs)).map {
+    case rr: ResultRows => Right(rowsToClass[T](rr))
+    case e: Error => Left(e.e)
+  }
 
   def getOpt(it: ByteIterator): Array[Short] = {
     val opt = it.getShort
@@ -173,8 +188,8 @@ trait SchemaEvent extends DBEvent {
   def onDropped(ks: String, table: String): Unit
 }
 
-case class FullFill(stream: Byte, actor: ActorRef)
-case class FullFilled(stream: Byte)
+case class FulFill(stream: Byte, actor: ActorRef)
+case class FulFilled(stream: Byte)
 
 case object ShallWeStart
 case object Start
@@ -215,14 +230,12 @@ case class Prepared(qid: ByteString, cols: Vector[(String, Array[Short])]) exten
   }
 }
 
-abstract class ResultResponse
-
-case class Error extends Response
+case class Error(e: String) extends Response
 case class Ready extends Response
 case class Authenticate extends Response
 case class Supported extends Response
-case class ResultRows(l: IndexedSeq[IndexedSeq[Option[Any]]]) extends ResultResponse
-case object Successful extends ResultResponse
-case object SetKeyspace extends ResultResponse
-case object SchemaChange extends ResultResponse
+case class ResultRows(l: IndexedSeq[IndexedSeq[Option[Any]]]) extends Response
+case object Successful extends Response
+case object SetKeyspace extends Response
+case object SchemaChange extends Response
 case class Event extends Response
