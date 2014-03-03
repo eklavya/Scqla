@@ -4,6 +4,7 @@ import org.scalatest.{ Matchers, BeforeAndAfterAll, FlatSpec }
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
+import Scqla._
 /**
  * Created by eklavya on 18/2/14.
  */
@@ -17,18 +18,17 @@ class QuerySpec extends FlatSpec with BeforeAndAfterAll with Matchers {
   }
 
   "Driver" should "be able to create a new keyspace" in {
-    val res = Await.result(Scqla.query[SchemaChange.type]("CREATE KEYSPACE demodb WITH REPLICATION = {'class' : 'SimpleStrategy','replication_factor': 1}"), 5 seconds)
-    println(s"this was executed ************************* $res")
-    res.isInstanceOf[SchemaChange.type] should be(true)
+    val res = Await.result(query("CREATE KEYSPACE demodb WITH REPLICATION = {'class' : 'SimpleStrategy','replication_factor': 1}"), 5 seconds)
+    res.isRight should be(true)
   }
 
   "Driver" should "be able to set global keyspace" in {
-    val res = Await.result(Scqla.query[SetKeyspace.type]("use demodb"), 5 seconds)
-    res.isInstanceOf[SetKeyspace.type] should be(true)
+    val res = Await.result(query("use demodb"), 5 seconds)
+    res.isRight should be(true)
   }
 
   "Driver" should "be able to create a new table" in {
-    val res = Await.result(Scqla.query[SchemaChange.type](
+    val res = Await.result(query(
       """CREATE TABLE demodb.emp (
     		empID int,
     		deptID int,
@@ -44,42 +44,52 @@ class QuerySpec extends FlatSpec with BeforeAndAfterAll with Matchers {
     		id uuid,
     		PRIMARY KEY (empID, deptID))
       """*/), 5 seconds)
-    res.isInstanceOf[SchemaChange.type] should be(true)
+    res.isRight should be(true)
   }
 
   "Driver" should "be able to execute prepared queries" in {
-    val res = Await.result(Scqla.prepare("INSERT INTO demodb.emp (empID, deptID, alive, id, first_name, last_name, salary, age) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"), 5 seconds)
-    val res1 = Await.result(res.execute(104, 15, true, new java.util.UUID(0, 0), "Hot", "Shot", 10000000.0, 98763L), 5 seconds)
-    res1.isInstanceOf[Successful.type] should be(true)
+    val res = Await.result(prepare("INSERT INTO demodb.emp (empID, deptID, alive, id, first_name, last_name, salary, age) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"), 5 seconds)
+    res.isRight should be(true)
+    val res1 = Await.result(res.right.get.execute(104, 15, true, new java.util.UUID(0, 0), "Hot", "Shot", 10000000.0, 98763L), 5 seconds)
+    res1.isRight should be(true)
   }
 
   "Driver" should "return proper case class list" in {
-    val res = Await.result(Scqla.queryAs[Emp]("select empID, deptID, alive, id, first_name, last_name, salary, age from demodb.emp"), 5 seconds)
-    res.foreach(_.isInstanceOf[Emp] should be(true))
-    res.head.asInstanceOf[Emp] should equal(Emp(104, 15, true, new java.util.UUID(0, 0), "Hot", "Shot", 10000000.0, 98763L))
+    val res = Await.result(queryAs[Emp]("select empID, deptID, alive, id, first_name, last_name, salary, age from demodb.emp"), 5 seconds)
+    res.isRight should be(true)
+    res.right.foreach(_.isInstanceOf[IndexedSeq[Emp]] should be(true))
+    res.right.get.head should equal(Emp(104, 15, true, new java.util.UUID(0, 0), "Hot", "Shot", 10000000.0, 98763L))
   }
 
   "Driver" should "return proper primitives" in {
-    val res = Await.result(Scqla.queryAs[Int]("select empid from demodb.emp"), 5 seconds)
-    res.foreach(_.isInstanceOf[Int] should be(true))
-    res.head.asInstanceOf[Int] should equal(104)
+    val res = Await.result(queryAs[Int]("select empid from demodb.emp"), 5 seconds)
+    res.isRight should be(true)
+    res.right.foreach { l =>
+      l.foreach(_.isInstanceOf[Int] should be(true))
+      l.head.asInstanceOf[Int] should equal(104)
+    }
   }
 
   "Driver" should "return proper strings" in {
-    val res = Await.result(Scqla.queryAs[String]("select first_name from demodb.emp"), 5 seconds)
-    res.foreach(_.isInstanceOf[String] should be(true))
-    res.head.asInstanceOf[String] should equal("Hot")
+    val res = Await.result(queryAs[String]("select first_name from demodb.emp"), 5 seconds)
+    res.isRight should be(true)
+    res.right.foreach { l =>
+      l.foreach(_.isInstanceOf[String] should be(true))
+      l.head.asInstanceOf[String] should equal("Hot")
+    }
   }
-  
+
   "Driver" should "be able to execute prepared queries and get results" in {
-    val res = Await.result(Scqla.prepare("select empID, deptID, alive, id, first_name, last_name, salary, age from demodb.emp where empid = ? and deptid = ?"), 5 seconds)
-    val res1 = Await.result(res.executeGet[Emp](104, 15), 5 seconds)
-    res1.foreach(_.isInstanceOf[Emp] should be(true))
-    res1.head.asInstanceOf[Emp] should equal(Emp(104, 15, true, new java.util.UUID(0, 0), "Hot", "Shot", 10000000.0, 98763L))
+    val res = Await.result(prepare("select empID, deptID, alive, id, first_name, last_name, salary, age from demodb.emp where empid = ? and deptid = ?"), 5 seconds)
+    res.isRight should be(true)
+    val res1 = Await.result(res.right.get.executeGet[Emp](104, 15), 5 seconds)
+    res1.isRight should be(true)
+    res1.right.get.foreach(_.isInstanceOf[Emp] should be(true))
+    res1.right.get.head should equal(Emp(104, 15, true, new java.util.UUID(0, 0), "Hot", "Shot", 10000000.0, 98763L))
   }
 
   "Driver" should "be able to drop keyspace" in {
-    val res = Await.result(Scqla.query[SchemaChange.type]("drop KEYSPACE demodb"), 5 seconds)
-    res.isInstanceOf[SchemaChange.type] should be(true)
+    val res = Await.result(query("drop KEYSPACE demodb"), 5 seconds)
+    res.isRight should be(true)
   }
 }
