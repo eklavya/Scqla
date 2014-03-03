@@ -7,6 +7,7 @@ The aim is to make use of scala features to provide a nice API.
 
 ##Highlights:
 1) Directly construct objects from results.
+
 2) Get an Either as a result of all queries. No exceptions, just Scala goodness.
 
 ###Connect to cassandra cluster.
