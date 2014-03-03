@@ -38,12 +38,7 @@ class QuerySpec extends FlatSpec with BeforeAndAfterAll with Matchers {
     		last_name varchar,
     		salary double,
     		age bigint,
-        PRIMARY KEY (empID, deptID))"""/*,
-            age bigint,
-    		salary double,
-    		id uuid,
-    		PRIMARY KEY (empID, deptID))
-      """*/), 5 seconds)
+        PRIMARY KEY (empID, deptID))"""), 5 seconds)
     res.isRight should be(true)
   }
 
