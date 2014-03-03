@@ -15,7 +15,7 @@ class Receiver extends Actor {
 
   implicit val sys = context.system
 
-  val fullFillMap = Map.empty[Byte, ActorRef]
+  val fulFillMap = Map.empty[Byte, ActorRef]
   
   // in case we are already connected and yet to be asked for confirmation
   var connected = false
@@ -35,8 +35,8 @@ class Receiver extends Actor {
           scqla = sender
           if (connected) scqla ! Start
 
-        case FullFill(stream, actor) =>
-          fullFillMap += (stream -> actor)
+        case FulFill(stream, actor) =>
+          fulFillMap += (stream -> actor)
 
         case x: ByteString => {
           val b = x.iterator
@@ -50,60 +50,60 @@ class Receiver extends Actor {
               b.drop(4)
               println(s"Error Code: ${b.getInt}")
               println(readString(b))
-              sndr ! FullFilled(stream)
+              sndr ! FulFilled(stream)
 
             //READY
             case 0x02 =>
               println(s"Server is ready. from receiver $self")
               connected = true
               if (scqla != null) scqla ! Start
-              sndr ! FullFilled(stream)
+              sndr ! FulFilled(stream)
 
             //AUTHENTICATE
             case 0x03 =>
               println("Authentication required. Authenticating ...")
-              sndr ! FullFilled(stream)
+              sndr ! FulFilled(stream)
             //send from conf
 
             //SUPPORTED
             case 0x06 =>
               val len = b.getInt
               println(readMultiMap(b))
-              sndr ! FullFilled(stream)
+              sndr ! FulFilled(stream)
 
             //RESULT
             case 0x08 =>
               b.drop(4).getInt match {
 
                 case VOID =>
-                  fullFillMap(stream) ! Successful
+                  fulFillMap(stream) ! Successful
                   println("Query was successful.")
-                  sndr ! FullFilled(stream)
+                  sndr ! FulFilled(stream)
 
                 case ROWS =>
-                  fullFillMap(stream) ! ResultRows(parseRows(x.drop(12)))
-                  sndr ! FullFilled(stream)
+                  fulFillMap(stream) ! ResultRows(parseRows(x.drop(12)))
+                  sndr ! FulFilled(stream)
 
                 case SET_KEYSPACE =>
-                  fullFillMap(stream) ! SetKeyspace
+                  fulFillMap(stream) ! SetKeyspace
                   println(s"keyspace is set to ${readString(b)}")
-                  sndr ! FullFilled(stream)
+                  sndr ! FulFilled(stream)
 
                 case PREPARED =>
                   val qid = readShortBytes(b).get
                   val cols = parseMetaData(b)
-                  fullFillMap(stream) ! Prepared(qid, cols)
-                  sndr ! FullFilled(stream)
+                  fulFillMap(stream) ! Prepared(qid, cols)
+                  sndr ! FulFilled(stream)
 
                 case SCHEMA_CHANGE =>
-                  fullFillMap(stream) ! SchemaChange
+                  fulFillMap(stream) ! SchemaChange
                   println(s"${readString(b)} ${readString(b)} ${readString(b)}")
-                  sndr ! FullFilled(stream)
+                  sndr ! FulFilled(stream)
               }
 
             //EVENT
             case 0x0C =>
-              sndr ! FullFilled(stream)
+              sndr ! FulFilled(stream)
           }
         }
       }
