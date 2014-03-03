@@ -47,7 +47,7 @@ class Sender(receiver: ActorRef, host: String, port: Int) extends Actor {
 
   def connected: Receive = {
 
-    case FullFilled(n: Byte) => streams(n) = true
+    case FulFilled(n: Byte) => streams(n) = true
 
     case c @ Credentials =>
 
@@ -59,7 +59,7 @@ class Sender(receiver: ActorRef, host: String, port: Int) extends Actor {
       streams(stream) = false
       val data = queryFrame(q, stream, ONE)
       connHandle ! Write(data)
-      receiver ! FullFill(stream, sender)
+      receiver ! FulFill(stream, sender)
 
     case p @ Prepare(q) =>
       val s = sender
@@ -67,7 +67,7 @@ class Sender(receiver: ActorRef, host: String, port: Int) extends Actor {
       streams(stream) = false
       val data = prepareFrame(q, stream)
       connHandle ! Write(data)
-      receiver ! FullFill(stream, sender)
+      receiver ! FulFill(stream, sender)
 
     case e @ Execute(bs) =>
       val s = sender
@@ -75,7 +75,7 @@ class Sender(receiver: ActorRef, host: String, port: Int) extends Actor {
       streams(stream) = false
       val data = executeFrame(bs, stream, ONE)
       connHandle ! Write(data)
-      receiver ! FullFill(stream, sender)
+      receiver ! FulFill(stream, sender)
 
 
     case r @ Register =>
