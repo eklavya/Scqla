@@ -105,7 +105,7 @@ prepare("select empID, deptID, alive, id, first_name, last_name, salary, age fro
   )
 )))
 ```
-#Drop keyspace
+###Drop keyspace
 ```scala
 query("drop KEYSPACE demodb").map(_.fold(
   error => println(error),
