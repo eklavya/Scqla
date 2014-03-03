@@ -17,8 +17,8 @@ class QuerySpec extends FlatSpec with BeforeAndAfterAll with Matchers {
   }
 
   "Driver" should "be able to create a new keyspace" in {
-    val res = Await.result(Scqla.query[SchemaChange.type](
-      "CREATE KEYSPACE demodb WITH REPLICATION = {'class' : 'SimpleStrategy','replication_factor': 1}"), 5 seconds)
+    val res = Await.result(Scqla.query[SchemaChange.type]("CREATE KEYSPACE demodb WITH REPLICATION = {'class' : 'SimpleStrategy','replication_factor': 1}"), 5 seconds)
+    println(s"this was executed ************************* $res")
     res.isInstanceOf[SchemaChange.type] should be(true)
   }
 
@@ -60,19 +60,17 @@ class QuerySpec extends FlatSpec with BeforeAndAfterAll with Matchers {
   }
 
   "Driver" should "return proper primitives" in {
-    Scqla.queryAs[Int]("select empid from demodb.emp").foreach { l =>
-      l.foreach(_.isInstanceOf[Int] should be(true))
-      l.head.asInstanceOf[Int] should equal(104)
-    }
+    val res = Await.result(Scqla.queryAs[Int]("select empid from demodb.emp"), 5 seconds)
+    res.foreach(_.isInstanceOf[Int] should be(true))
+    res.head.asInstanceOf[Int] should equal(104)
   }
 
   "Driver" should "return proper strings" in {
-    Scqla.queryAs[String]("select first_name from demodb.emp").foreach { l =>
-      l.foreach(_.isInstanceOf[String] should be(true))
-      l.head.asInstanceOf[String] should equal("Hot")
-    }
+    val res = Await.result(Scqla.queryAs[String]("select first_name from demodb.emp"), 5 seconds)
+    res.foreach(_.isInstanceOf[String] should be(true))
+    res.head.asInstanceOf[String] should equal("Hot")
   }
-
+  
   "Driver" should "be able to execute prepared queries and get results" in {
     val res = Await.result(Scqla.prepare("select empID, deptID, alive, id, first_name, last_name, salary, age from demodb.emp where empid = ? and deptid = ?"), 5 seconds)
     val res1 = Await.result(res.executeGet[Emp](104, 15), 5 seconds)
