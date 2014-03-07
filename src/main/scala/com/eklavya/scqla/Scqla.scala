@@ -15,6 +15,7 @@ import scala.reflect.ClassTag
 import com.typesafe.config._
 import akka.routing.FromConfig
 import akka.routing.RoundRobinRouter
+import EventHandler._
 
 object Scqla {
 
@@ -37,16 +38,17 @@ object Scqla {
   }
 
   val router = system.actorOf(Props.empty.withRouter(RoundRobinRouter(routees = actors)), "router")
-
-  implicit val byteOrder = java.nio.ByteOrder.BIG_ENDIAN
-
-  implicit val timeout = Timeout(10 seconds)
+  val eventListener = system.actorOf(Props(new EventListener(nodes.get(0), port)))
 
   def connect = {
     (0 until numConnections).map { i =>
       val res = Await.result(system.actorFor(s"/user/receiver$i") ? ShallWeStart, 8 seconds)
     }
   }
+
+  implicit val byteOrder = java.nio.ByteOrder.BIG_ENDIAN
+
+  implicit val timeout = Timeout(10 seconds)
 
   private[this] def rowsToClass[T: ClassTag](rr: ResultRows): IndexedSeq[T] = {
     val claas = implicitly[ClassTag[T]].runtimeClass
@@ -68,9 +70,8 @@ object Scqla {
   }
 
   def queryAs[T: ClassTag](q: String): Future[Either[String, IndexedSeq[T]]] = query(q).map(_.fold(
-  	error => Left(error),
-    valid => Right(rowsToClass[T](valid.asInstanceOf[ResultRows]))
-  ))
+    error => Left(error),
+    valid => Right(rowsToClass[T](valid.asInstanceOf[ResultRows]))))
 
   def prepare(q: String): Future[Either[String, Prepared]] = (router ? Prepare(q)).map {
     case p: Prepared => Right(p)
@@ -86,106 +87,6 @@ object Scqla {
     case rr: ResultRows => Right(rowsToClass[T](rr))
     case e: Error => Left(e.e)
   }
-
-  def getOpt(it: ByteIterator): Array[Short] = {
-    val opt = it.getShort
-    opt match {
-      case CUSTOM =>
-        val n = new Array[Byte](it.getShort)
-        it.getBytes(n)
-        val s = ByteString(n)
-        Array(opt) ++ s.toArray.map(_.toShort)
-
-      case ASCII | BIGINT | BLOB | BOOLEAN |
-        COUNTER | DECIMAL | DOUBLE | FLOAT |
-        INT | TEXT | TIMESTAMP | UUID |
-        VARCHAR | VARINT | TIMEUUID | INET => Array(opt)
-
-      case LIST =>
-        val id = it.getShort
-        Array(opt, id)
-
-      case MAP =>
-        val id1 = it.getShort
-        val id2 = it.getShort
-        Array(opt, id1, id2)
-
-      case SET =>
-        val id = it.getShort
-        Array(opt, id)
-    }
-  }
-
-  def parseMetaData(it: ByteIterator) = {
-    val flags = it.getInt
-    val columnCount = it.getInt
-
-    var cols = Vector[(String, Array[Short])]()
-
-    if ((flags & 0x0001) == 1) {
-      val keyspace = readString(it)
-      val tablename = readString(it)
-      println(s"table name : $tablename")
-      (0 until columnCount) foreach { i =>
-        val name = readString(it)
-        val opt = getOpt(it)
-        cols = cols :+ (name, opt)
-      }
-    } else {
-
-      (0 until columnCount) foreach { i =>
-        val keyspace = readString(it)
-        val tableName = readString(it)
-        val name = keyspace + tableName + readString(it)
-        val opt = getOpt(it)
-        cols = cols :+ (name, opt)
-      }
-    }
-    cols
-  }
-
-  def parseRows(body: ByteString) = {
-    val it = body.iterator
-    val cols = parseMetaData(it)
-
-    val rowCount = it.getInt
-
-    (0 until rowCount).map { i =>
-      (0 until cols.size).map { j =>
-        readType(cols(j)._2(0), it)
-      }
-    }
-  }
-
-  def register(w: DBEvent) = w match {
-    case _: TopologyEvent =>
-    case _: StatusEvent =>
-    case _: SchemaEvent =>
-  }
-
-  def unRegister(w: DBEvent) = w match {
-    case _: TopologyEvent =>
-    case _: StatusEvent =>
-    case _: SchemaEvent =>
-  }
-}
-
-trait DBEvent
-
-trait TopologyEvent extends DBEvent {
-  def onNewNode(i: InetAddress): Unit
-  def onRemovedNode(i: InetAddress): Unit
-}
-
-trait StatusEvent extends DBEvent {
-  def onNodeUp(i: InetAddress): Unit
-  def onNodeDown(i: InetAddress): Unit
-}
-
-trait SchemaEvent extends DBEvent {
-  def onCreated(ks: String, table: String): Unit
-  def onUpdated(ks: String, table: String): Unit
-  def onDropped(ks: String, table: String): Unit
 }
 
 case class FulFill(stream: Byte, actor: ActorRef)
@@ -195,6 +96,7 @@ case object ShallWeStart
 case object Start
 
 abstract class Request
+abstract class Response
 
 case class Statrtup extends Request
 case class Credentials extends Request
@@ -202,9 +104,14 @@ case class Options extends Request
 case class Query(q: String) extends Request
 case class Prepare(q: String) extends Request
 case class Execute(bs: ByteString) extends Request
-//case class Register extends Request
-
-abstract class Response
+case class Error(e: String) extends Response
+case class Ready extends Response
+case class Authenticate extends Response
+case class Supported extends Response
+case class ResultRows(l: IndexedSeq[IndexedSeq[Option[Any]]]) extends Response
+case object Successful extends Response
+case object SetKeyspace extends Response
+case object SchemaChange extends Response
 
 case class Prepared(qid: ByteString, cols: Vector[(String, Array[Short])]) extends Response {
 
@@ -229,13 +136,3 @@ case class Prepared(qid: ByteString, cols: Vector[(String, Array[Short])]) exten
 
   }
 }
-
-case class Error(e: String) extends Response
-case class Ready extends Response
-case class Authenticate extends Response
-case class Supported extends Response
-case class ResultRows(l: IndexedSeq[IndexedSeq[Option[Any]]]) extends Response
-case object Successful extends Response
-case object SetKeyspace extends Response
-case object SchemaChange extends Response
-case class Event extends Response

@@ -1,7 +1,7 @@
 package com.eklavya.scqla
 
-import akka.util.{ByteStringBuilder, ByteString, ByteIterator}
-import java.util.{UUID => uu}
+import akka.util.{ ByteStringBuilder, ByteString, ByteIterator }
+import java.util.{ UUID => uu }
 import java.net.InetAddress
 import com.eklavya.scqla.Header._
 import scala.Some
@@ -44,6 +44,21 @@ object Frame {
     b.putShort(ba.length)
     b.putBytes(ba)
     b.result
+  }
+
+  def readInet(it: ByteIterator): InetAddress = {
+    val ip = it.getByte match {
+      case 4 =>
+        val i = new Array[Byte](4)
+        it.getBytes(i)
+        InetAddress.getByAddress(i)
+      case 16 =>
+        val i = new Array[Byte](16)
+        it.getBytes(i)
+        InetAddress.getByAddress(i)
+    }
+    val port = it.getInt
+    ip
   }
 
   def readShortBytes(it: ByteIterator): Option[ByteString] = {
@@ -113,17 +128,18 @@ object Frame {
     option match {
       case CUSTOM | BLOB => builder.append(writeBytes(param.asInstanceOf[Array[Byte]]))
 
-      case ASCII | TEXT | VARCHAR => val b = ByteString(param.asInstanceOf[String]);builder.putInt(b.length).append(b)
+      case ASCII | TEXT | VARCHAR =>
+        val b = ByteString(param.asInstanceOf[String]); builder.putInt(b.length).append(b)
 
       case BIGINT | VARINT => builder.putInt(8).putLong(param.asInstanceOf[Long])
 
-      case BOOLEAN => builder.putInt(1).putByte({if (param.asInstanceOf[Boolean]) 1 else 0})
+      case BOOLEAN => builder.putInt(1).putByte({ if (param.asInstanceOf[Boolean]) 1 else 0 })
 
       case TIMESTAMP | COUNTER => builder.append(writeBytes(param.toString.toCharArray.map(_.toByte)))
 
       case DECIMAL => builder.append(writeBytes(param.toString.toCharArray.map(_.toByte)))
 
-      case DOUBLE => builder.putInt(8).putDouble(param.asInstanceOf[Double])//append(writeBytes(param.asInstanceOf[Double].toString.toCharArray.map(_.toByte)))
+      case DOUBLE => builder.putInt(8).putDouble(param.asInstanceOf[Double]) //append(writeBytes(param.asInstanceOf[Double].toString.toCharArray.map(_.toByte)))
 
       case FLOAT => builder.append(writeBytes(param.asInstanceOf[Float].toString.toCharArray.map(_.toByte)))
 
@@ -136,10 +152,16 @@ object Frame {
     }
   }
 
-
   def readList(it: ByteIterator) = {
     val num = it.getShort
     (0 until num).map(_ => readString(it))
+  }
+
+  def writeList(l: List[String]): ByteString = {
+    val builder = new ByteStringBuilder
+    builder.putShort(l.size)
+    l.foreach(s => builder.append(writeString(s)))
+    builder.result
   }
 
   def readMultiMap(it: ByteIterator) = {
@@ -147,6 +169,76 @@ object Frame {
     (0 until num).map { i =>
       readString(it) -> readList(it)
     }.toMap
+  }
+
+  def getOpt(it: ByteIterator): Array[Short] = {
+    val opt = it.getShort
+    opt match {
+      case CUSTOM =>
+        val n = new Array[Byte](it.getShort)
+        it.getBytes(n)
+        val s = ByteString(n)
+        Array(opt) ++ s.toArray.map(_.toShort)
+
+      case ASCII | BIGINT | BLOB | BOOLEAN |
+        COUNTER | DECIMAL | DOUBLE | FLOAT |
+        INT | TEXT | TIMESTAMP | UUID |
+        VARCHAR | VARINT | TIMEUUID | INET => Array(opt)
+
+      case LIST =>
+        val id = it.getShort
+        Array(opt, id)
+
+      case MAP =>
+        val id1 = it.getShort
+        val id2 = it.getShort
+        Array(opt, id1, id2)
+
+      case SET =>
+        val id = it.getShort
+        Array(opt, id)
+    }
+  }
+
+  def parseMetaData(it: ByteIterator) = {
+    val flags = it.getInt
+    val columnCount = it.getInt
+
+    var cols = Vector[(String, Array[Short])]()
+
+    if ((flags & 0x0001) == 1) {
+      val keyspace = readString(it)
+      val tablename = readString(it)
+      println(s"table name : $tablename")
+      (0 until columnCount) foreach { i =>
+        val name = readString(it)
+        val opt = getOpt(it)
+        cols = cols :+ (name, opt)
+      }
+    } else {
+
+      (0 until columnCount) foreach { i =>
+        val keyspace = readString(it)
+        val tableName = readString(it)
+        val name = keyspace + tableName + readString(it)
+        val opt = getOpt(it)
+        cols = cols :+ (name, opt)
+      }
+    }
+    cols
+  }
+
+  def parseRows(body: ByteString) = {
+    val it = body.iterator
+    val cols = parseMetaData(it)
+
+    val rowCount = it.getInt
+
+    (0 until rowCount).map { i =>
+      (0 until cols.size).map { j =>
+        readType(cols(j)._2(0), it)
+      }
+    }
   }
 
   def startupFrame(stream: Byte): ByteString = {
@@ -166,7 +258,7 @@ object Frame {
   def credentialsFrame(creds: Map[String, String], stream: Byte): ByteString = {
     val builder = new ByteStringBuilder
     builder.putShort(creds.size)
-    creds.foreach { case(k, v) => builder.append(writeString(k)).append(writeString(v))}
+    creds.foreach { case (k, v) => builder.append(writeString(k)).append(writeString(v)) }
     builder.result
   }
 
@@ -200,6 +292,15 @@ object Frame {
     val body = new ByteStringBuilder
     body.append(b)
     body.putShort(consistency)
+    builder.putInt(body.length) ++= body.result
+    builder.result
+  }
+
+  def registerFrame(b: ByteString, stream: Byte): ByteString = {
+    val builder = new ByteStringBuilder
+    builder.putByte(VERSION).putByte(FLAGS).putByte(stream).putByte(REGISTER)
+    val body = new ByteStringBuilder
+    body.append(b)
     builder.putInt(body.length) ++= body.result
     builder.result
   }
