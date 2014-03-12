@@ -16,6 +16,7 @@ import com.typesafe.config._
 import akka.routing.FromConfig
 import akka.routing.RoundRobinRouter
 import EventHandler._
+import scala.collection.JavaConversions._
 
 object Scqla {
 
@@ -29,26 +30,30 @@ object Scqla {
 
   val system = ActorSystem("Scqla")
 
-  val numConnections = if (nodes.size > numNodes) numNodes else nodes.size
+  val numConnections = cnfg.getInt("numConnections")
 
-  val actors = (0 until numConnections).map { i =>
-    val receiver = system.actorOf(Props[Receiver], s"receiver$i")
-    val client = system.actorOf(Props(new Sender(receiver, nodes.get(i), port)), s"sender$i")
-    s"/user/sender$i"
-  }
+  implicit val byteOrder = java.nio.ByteOrder.BIG_ENDIAN
+
+  implicit val timeout = Timeout(10 seconds)
+
+  val actors = nodes.flatMap { node =>
+    (0 until numConnections).map { i =>
+      val receiver = system.actorOf(Props[Receiver], s"receiver-$node-$i")
+      val client = system.actorOf(Props(new Sender(receiver, node, port)), s"sender-$node-$i")
+      s"/user/sender-$node-$i"
+    }
+  }.toVector
 
   val router = system.actorOf(Props.empty.withRouter(RoundRobinRouter(routees = actors)), "router")
   val eventListener = system.actorOf(Props(new EventListener(nodes.get(0), port)))
 
   def connect = {
-    (0 until numConnections).map { i =>
-      val res = Await.result(system.actorFor(s"/user/receiver$i") ? ShallWeStart, 8 seconds)
+    nodes.foreach { node =>
+      (0 until numConnections).foreach { i =>
+        val res = Await.result(system.actorFor(s"/user/receiver-$node-$i") ? ShallWeStart, 8 seconds)
+      }
     }
   }
-
-  implicit val byteOrder = java.nio.ByteOrder.BIG_ENDIAN
-
-  implicit val timeout = Timeout(10 seconds)
 
   private[this] def rowsToClass[T: ClassTag](rr: ResultRows): IndexedSeq[T] = {
     val claas = implicitly[ClassTag[T]].runtimeClass
