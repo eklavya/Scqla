@@ -1,9 +1,8 @@
 Scqla
 =====
 
-Cassandra CQL driver for Scala.
+A fully asynchronous Cassandra CQL driver for Scala using Akka IO.
 
-The aim is to make use of scala features to provide a nice API.
 
 ##Highlights:
 1) Directly construct objects from results.
