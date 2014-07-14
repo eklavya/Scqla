@@ -59,7 +59,7 @@ class Sender(receiver: ActorRef, host: String, port: Int) extends Actor {
       streams(stream) = false
       val data = queryFrame(q, stream, ONE)
       connHandle ! Write(data)
-      receiver ! FulFill(stream, sender)
+      receiver ! FulFill(stream, s)
 
     case p @ Prepare(q) =>
       val s = sender
@@ -67,7 +67,7 @@ class Sender(receiver: ActorRef, host: String, port: Int) extends Actor {
       streams(stream) = false
       val data = prepareFrame(q, stream)
       connHandle ! Write(data)
-      receiver ! FulFill(stream, sender)
+      receiver ! FulFill(stream, s)
 
     case e @ Execute(bs) =>
       val s = sender
@@ -75,7 +75,7 @@ class Sender(receiver: ActorRef, host: String, port: Int) extends Actor {
       streams(stream) = false
       val data = executeFrame(bs, stream, ONE)
       connHandle ! Write(data)
-      receiver ! FulFill(stream, sender)
+      receiver ! FulFill(stream, s)
 
 
     case r @ Register =>
