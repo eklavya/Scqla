@@ -11,7 +11,9 @@ A fully asynchronous Cassandra CQL driver for Scala using Akka IO.
 
 3) Load balance between cassandra nodes.
 
-4) Get an Either as a result of all queries. No exceptions, just Scala goodness.
+4) Register callbacks for events.
+
+5) Get an Either as a result of all queries. No exceptions, just Scala goodness.
 
 ###Connect to cassandra cluster.
 ```scala
@@ -109,6 +111,30 @@ prepare("select empID, deptID, alive, id, first_name, last_name, salary, age fro
   )
 )))
 ```
+###Register a callback for an event
+```scala
+Events.registerDBEvent(CreatedEvent, (a, b) => {
+  println(s"Hear hear, $a $b have come to be.")
+})
+```
+Events:
+```scala
+abstract class Event
+
+abstract class NodeEvent extends Event
+case object NewNodeEvent extends NodeEvent
+case object RemovedNodeEvent extends NodeEvent
+case object NodeUpEvent extends NodeEvent
+case object NodeDownEvent extends NodeEvent
+
+abstract class DBEvent extends Event
+case object CreatedEvent extends DBEvent
+case object UpdatedEvent extends DBEvent
+case object DroppedEvent extends DBEvent
+```
+NodeEvent handlers are of the type ``` Function[InetAddress, Unit] ```
+DBEvent handlers are of the type ``` Function2[String, String, Unit] ```
+
 ###Drop keyspace
 ```scala
 query("drop KEYSPACE demodb").map(_.fold(

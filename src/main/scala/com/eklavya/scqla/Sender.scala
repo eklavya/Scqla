@@ -79,6 +79,7 @@ class Sender(receiver: ActorRef, host: String, port: Int) extends Actor {
 
 
     case r @ Register =>
+      
 
     case CommandFailed(w: Write) => 
 

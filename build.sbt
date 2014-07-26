@@ -2,7 +2,7 @@ name := "Scqla"
 
 version := "1.0-SNAPSHOT"
 
-libraryDependencies += "com.typesafe.akka" %% "akka-actor" % "2.2.3"
+libraryDependencies += "com.typesafe.akka" %% "akka-actor" % "2.3.4"
 
 libraryDependencies += "com.typesafe" % "config" % "1.2.0"
 

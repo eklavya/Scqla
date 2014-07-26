@@ -15,6 +15,8 @@ class Receiver extends Actor {
 
   implicit val sys = context.system
 
+  implicit val byteOrder = java.nio.ByteOrder.BIG_ENDIAN
+  
   val fulFillMap = Map.empty[Byte, ActorRef]
   
   // in case we are already connected and yet to be asked for confirmation
@@ -103,6 +105,7 @@ class Receiver extends Actor {
 
             //EVENT
             case 0x0C =>
+              println(s"event came $b")
               sndr ! FulFilled(stream)
           }
         }
@@ -112,6 +115,5 @@ class Receiver extends Actor {
   val VERSION: Byte = 0x01
   val FLAGS: Byte = 0x00
   val consistency = ANY
-  implicit val byteOrder = java.nio.ByteOrder.BIG_ENDIAN
 
 }

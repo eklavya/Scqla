@@ -53,6 +53,7 @@ object Scqla {
         val res = Await.result(system.actorFor(s"/user/receiver-$node-$i") ? ShallWeStart, 8 seconds)
       }
     }
+    Await.result(eventListener ? ShallWeStart, 8 seconds)
   }
 
   private[this] def rowsToClass[T: ClassTag](rr: ResultRows): IndexedSeq[T] = {

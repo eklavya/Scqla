@@ -15,6 +15,9 @@ class QuerySpec extends FlatSpec with BeforeAndAfterAll with Matchers {
 
   override def beforeAll {
       Scqla.connect
+      Events.registerDBEvent(CreatedEvent, (a, b) => {
+        println(s"Hear hear, $a $b have come to be.")
+      })
   }
 
   "Driver" should "be able to create a new keyspace" in {

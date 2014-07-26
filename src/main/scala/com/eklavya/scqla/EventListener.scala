@@ -9,7 +9,7 @@ import akka.io.Tcp.CommandFailed
 import akka.io.IO
 import akka.actor.ActorRef
 import akka.io.Tcp.Connected
-import akka.actor.IO.Close
+// import akka.actor.IO.Close
 import akka.io.Tcp.Write
 import akka.io.Tcp.Connect
 import akka.io.Tcp
@@ -20,6 +20,8 @@ class EventListener(host: String, port: Int) extends Actor {
   val remote = new InetSocketAddress(host, port)
 
   var connHandle: ActorRef = _
+
+  var scqla: ActorRef = _
 
   var registered = false
 
@@ -37,6 +39,9 @@ class EventListener(host: String, port: Int) extends Actor {
       connHandle ! Register(self)
       connHandle ! Write(startupFrame(0))
       context become connected
+
+    case ShallWeStart =>
+      scqla = sender
   }
 
   def connected: Receive = {
@@ -46,6 +51,10 @@ class EventListener(host: String, port: Int) extends Actor {
     //    case o @ Options =>
     //
     //    case r @ Register =>
+
+    case ShallWeStart =>
+          scqla = sender
+          if (registered) scqla ! Start
 
     case CommandFailed(w: Write) =>
 
@@ -67,8 +76,9 @@ class EventListener(host: String, port: Int) extends Actor {
         case 0x02 =>
           if (!registered) {
             println(s"Server is ready from receiver $self, registering for events.")
-            connHandle ! Write(writeList(List("TOPOLOGY_CHANGE", "STATUS_CHANGE", "SCHEMA_CHANGE")))
             registered = true
+            if (scqla != null) scqla ! Start
+            connHandle ! Write(registerFrame(writeList(List("TOPOLOGY_CHANGE", "STATUS_CHANGE", "SCHEMA_CHANGE")), 1))
           }
 
         //AUTHENTICATE
