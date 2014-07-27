@@ -13,9 +13,12 @@ case class Emp(empId: Int, deptId: Int, alive: Boolean, id: java.util.UUID, firs
 
 class QuerySpec extends FlatSpec with BeforeAndAfterAll with Matchers {
 
+  var receivedEvent = false
+
   override def beforeAll {
-      Scqla.connect
+    Scqla.connect
       Events.registerDBEvent(CreatedEvent, (a, b) => {
+        receivedEvent = true
         println(s"Hear hear, $a $b have come to be.")
       })
   }
@@ -23,6 +26,10 @@ class QuerySpec extends FlatSpec with BeforeAndAfterAll with Matchers {
   "Driver" should "be able to create a new keyspace" in {
     val res = Await.result(query("CREATE KEYSPACE demodb WITH REPLICATION = {'class' : 'SimpleStrategy','replication_factor': 1}"), 5 seconds)
     res.isRight should be(true)
+  }
+
+  "Driver" should "report events and execute callbacks" in {
+    receivedEvent should be(true)
   }
 
   "Driver" should "be able to set global keyspace" in {
@@ -84,6 +91,11 @@ class QuerySpec extends FlatSpec with BeforeAndAfterAll with Matchers {
     res1.isRight should be(true)
     res1.right.get.foreach(_.isInstanceOf[Emp] should be(true))
     res1.right.get.head should equal(Emp(104, 15, true, new java.util.UUID(0, 0), "Hot", "Shot", 10000000.0, 98763L))
+  }
+
+  "Driver" should "report error for a bad query" in {
+    val res = Await.result(prepare("select emID, deptID, alive, id, first_name, last_name, salary, age from demodb.emp where empid = ? and deptid = ?"), 5 seconds)
+    res.isLeft should be(true)
   }
 
   "Driver" should "be able to drop keyspace" in {

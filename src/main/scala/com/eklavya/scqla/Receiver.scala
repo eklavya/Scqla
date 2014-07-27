@@ -3,8 +3,7 @@ package com.eklavya.scqla
 import akka.actor.{ ActorRef, Actor }
 import com.eklavya.scqla.Header._
 import akka.io.Tcp._
-import akka.util.{ ByteString, ByteStringBuilder }
-import Scqla._
+import akka.util.ByteString
 import Frame._
 import scala.collection.mutable.Map
 
@@ -47,34 +46,30 @@ class Receiver extends Actor {
 
           b.getByte match {
 
-            //ERROR
-            case 0x00 =>
+            case ERROR =>
               b.drop(4)
-              println(s"Error Code: ${b.getInt}")
-              println(readString(b))
+              val code = b.getInt
+              val error = readString(b)
+              fulFillMap(stream) ! Error(code, error)
               sndr ! FulFilled(stream)
 
-            //READY
-            case 0x02 =>
+            case READY =>
               println(s"Server is ready. from receiver $self")
               connected = true
               if (scqla != null) scqla ! Start
               sndr ! FulFilled(stream)
 
-            //AUTHENTICATE
-            case 0x03 =>
+            case AUTHENTICATE =>
               println("Authentication required. Authenticating ...")
               sndr ! FulFilled(stream)
             //send from conf
 
-            //SUPPORTED
-            case 0x06 =>
+            case SUPPORTED =>
               val len = b.getInt
               println(readMultiMap(b))
               sndr ! FulFilled(stream)
 
-            //RESULT
-            case 0x08 =>
+            case RESULT =>
               b.drop(4).getInt match {
 
                 case VOID =>
@@ -103,10 +98,8 @@ class Receiver extends Actor {
                   sndr ! FulFilled(stream)
               }
 
-            //EVENT
-            case 0x0C =>
-              println(s"event came $b")
-              sndr ! FulFilled(stream)
+            case EVENT =>
+              println(s"Strange we shouldn't get event notification on this connection.")
           }
         }
       }

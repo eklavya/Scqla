@@ -1,21 +1,15 @@
 package com.eklavya.scqla
 
-import scala.concurrent.{ Future, Await, Promise }
-import Header._
+import scala.concurrent.{ Future, Await }
 import akka.actor.{ ActorRef, ActorSystem, Props }
-import akka.util.ByteStringBuilder
 import akka.util._
-import java.util.{ UUID => uu }
-import java.net.InetAddress
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 import Frame._
 import akka.pattern.ask
 import scala.reflect.ClassTag
 import com.typesafe.config._
-import akka.routing.FromConfig
 import akka.routing.RoundRobinRouter
-import EventHandler._
 import scala.collection.JavaConversions._
 
 object Scqla {
@@ -50,7 +44,7 @@ object Scqla {
   def connect = {
     nodes.foreach { node =>
       (0 until numConnections).foreach { i =>
-        val res = Await.result(system.actorFor(s"/user/receiver-$node-$i") ? ShallWeStart, 8 seconds)
+        val res = Await.result(system.actorSelection(s"/user/receiver-$node-$i") ? ShallWeStart, 8 seconds)
       }
     }
     Await.result(eventListener ? ShallWeStart, 8 seconds)
@@ -70,12 +64,12 @@ object Scqla {
     }
   }
 
-  def query(q: String)(implicit tag: ClassTag[Response]): Future[Either[String, Response]] = (router ? Query(q)).map {
+  def query(q: String, consistency: Short = Header.ONE): Future[Either[String, Response]] = (router ? Query(q, consistency)).map {
     case e: Error => Left(e.e)
     case x: Response => Right(x)
   }
 
-  def queryAs[T: ClassTag](q: String): Future[Either[String, IndexedSeq[T]]] = query(q).map(_.fold(
+  def queryAs[T: ClassTag](q: String, consistency: Short = Header.ONE): Future[Either[String, IndexedSeq[T]]] = query(q, consistency).map(_.fold(
     error => Left(error),
     valid => Right(rowsToClass[T](valid.asInstanceOf[ResultRows]))))
 
@@ -104,16 +98,16 @@ case object Start
 abstract class Request
 abstract class Response
 
-case class Statrtup extends Request
-case class Credentials extends Request
-case class Options extends Request
-case class Query(q: String) extends Request
+case object Statrtup extends Request
+case object Credentials extends Request
+case object Options extends Request
+case class Query(q: String, consistency: Short) extends Request
 case class Prepare(q: String) extends Request
 case class Execute(bs: ByteString) extends Request
-case class Error(e: String) extends Response
-case class Ready extends Response
-case class Authenticate extends Response
-case class Supported extends Response
+case class Error(code: Int, e: String) extends Response
+case object Ready extends Response
+case object Authenticate extends Response
+case object Supported extends Response
 case class ResultRows(l: IndexedSeq[IndexedSeq[Option[Any]]]) extends Response
 case object Successful extends Response
 case object SetKeyspace extends Response

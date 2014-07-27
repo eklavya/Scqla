@@ -9,11 +9,11 @@ import akka.io.Tcp.CommandFailed
 import akka.io.IO
 import akka.actor.ActorRef
 import akka.io.Tcp.Connected
-// import akka.actor.IO.Close
 import akka.io.Tcp.Write
 import akka.io.Tcp.Connect
 import akka.io.Tcp
 import Frame._
+import Header._
 
 class EventListener(host: String, port: Int) extends Actor {
 
@@ -45,12 +45,6 @@ class EventListener(host: String, port: Int) extends Actor {
   }
 
   def connected: Receive = {
-    //
-    //    case c @ Credentials =>
-    //
-    //    case o @ Options =>
-    //
-    //    case r @ Register =>
 
     case ShallWeStart =>
           scqla = sender
@@ -65,15 +59,13 @@ class EventListener(host: String, port: Int) extends Actor {
 
       b.getByte match {
 
-        //ERROR
-        case 0x00 =>
+        case ERROR =>
           b.drop(4)
           println(s"Error Code: ${b.getInt}")
           println(readString(b))
           context stop self
 
-        //READY
-        case 0x02 =>
+        case READY =>
           if (!registered) {
             println(s"Server is ready from receiver $self, registering for events.")
             registered = true
@@ -81,13 +73,11 @@ class EventListener(host: String, port: Int) extends Actor {
             connHandle ! Write(registerFrame(writeList(List("TOPOLOGY_CHANGE", "STATUS_CHANGE", "SCHEMA_CHANGE")), 1))
           }
 
-        //AUTHENTICATE
-        case 0x03 =>
+        case AUTHENTICATE =>
           println("Authentication required. Authenticating ...")
         //send from conf
 
-        //EVENT
-        case 0x0C =>
+        case EVENT =>
           b.drop(4)
           readString(b) match {
 

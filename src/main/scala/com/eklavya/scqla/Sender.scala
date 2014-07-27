@@ -53,11 +53,11 @@ class Sender(receiver: ActorRef, host: String, port: Int) extends Actor {
 
     case o @ Options =>
 
-    case Query(q) =>
+    case Query(q, consistency) =>
       val s = sender
       val stream = getStream
       streams(stream) = false
-      val data = queryFrame(q, stream, ONE)
+      val data = queryFrame(q, stream, consistency)
       connHandle ! Write(data)
       receiver ! FulFill(stream, s)
 
