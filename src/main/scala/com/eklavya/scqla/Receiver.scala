@@ -89,7 +89,7 @@ class Receiver extends Actor {
                 case PREPARED =>
                   val qid = readShortBytes(b).get
                   val cols = parseMetaData(b)
-                  fulFillMap(stream) ! Prepared(qid, cols)
+                  fulFillMap(stream) ! Prepared(qid, sndr, cols)
                   sndr ! FulFilled(stream)
 
                 case SCHEMA_CHANGE =>

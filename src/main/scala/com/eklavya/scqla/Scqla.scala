@@ -78,12 +78,12 @@ object Scqla {
     case e: Error => Left(e.e)
   }
 
-  def execute(bs: ByteString): Future[Either[String, Response]] = (router ? Execute(bs)).map {
+  def execute(bs: ByteString, keeper: ActorRef): Future[Either[String, Response]] = (keeper ? Execute(bs)).map {
     case e: Error => Left(e.e)
     case x: Response => Right(x)
   }
 
-  def executeGet[T: ClassTag](bs: ByteString): Future[Either[String, IndexedSeq[T]]] = (router ? Execute(bs)).map {
+  def executeGet[T: ClassTag](bs: ByteString, keeper: ActorRef): Future[Either[String, IndexedSeq[T]]] = (keeper ? Execute(bs)).map {
     case rr: ResultRows => Right(rowsToClass[T](rr))
     case e: Error => Left(e.e)
   }
@@ -113,7 +113,10 @@ case object Successful extends Response
 case object SetKeyspace extends Response
 case object SchemaChange extends Response
 
-case class Prepared(qid: ByteString, cols: Vector[(String, Array[Short])]) extends Response {
+//keeper is the actor which is connected to the node from where we got this
+//query id, this id is only valid for this node, so we need to execute the preapred
+//query on the same node.
+case class Prepared(qid: ByteString, keeper: ActorRef, cols: Vector[(String, Array[Short])]) extends Response {
 
   private def buildBS(params: Any*) = {
     val builder = new ByteStringBuilder
@@ -128,9 +131,9 @@ case class Prepared(qid: ByteString, cols: Vector[(String, Array[Short])]) exten
     builder.result
   }
 
-  def execute(params: Any*) = Scqla.execute(buildBS(params: _*))
+  def execute(params: Any*) = Scqla.execute(buildBS(params: _*), keeper)
 
-  def executeGet[T: ClassTag](params: Any*) = Scqla.executeGet[T](buildBS(params: _*))
+  def executeGet[T: ClassTag](params: Any*) = Scqla.executeGet[T](buildBS(params: _*), keeper)
 
   def insert[A](a: A) = {
 
