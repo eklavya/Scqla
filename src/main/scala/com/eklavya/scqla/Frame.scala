@@ -1,10 +1,10 @@
 package com.eklavya.scqla
 
-import akka.util.{ ByteStringBuilder, ByteString, ByteIterator }
-import java.util.{ UUID => uu }
 import java.net.InetAddress
+import java.util.{UUID => uu}
+
+import akka.util.{ByteIterator, ByteString, ByteStringBuilder}
 import com.eklavya.scqla.Header._
-import scala.Some
 
 /**
  * Created by eklavya on 13/2/14.

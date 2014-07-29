@@ -1,10 +1,11 @@
 package com.eklavya.scqla
 
-import akka.actor.{ ActorRef, Actor }
-import com.eklavya.scqla.Header._
+import akka.actor.{Actor, ActorRef}
 import akka.io.Tcp._
 import akka.util.ByteString
-import Frame._
+import com.eklavya.scqla.Frame._
+import com.eklavya.scqla.Header._
+
 import scala.collection.mutable.Map
 
 /**

@@ -1,9 +1,11 @@
 package com.eklavya.scqla
 
 import java.net.InetAddress
+
+import com.eklavya.scqla.Scqla.ec
+
 import scala.collection.mutable.Set
 import scala.concurrent.Future
-import scala.concurrent.ExecutionContext.Implicits.global
 
 object EventHandler {
   

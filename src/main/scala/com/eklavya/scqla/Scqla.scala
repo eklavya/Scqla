@@ -1,16 +1,17 @@
 package com.eklavya.scqla
 
-import scala.concurrent.{ Future, Await }
-import akka.actor.{ ActorRef, ActorSystem, Props }
-import akka.util._
-import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext.Implicits.global
-import Frame._
+import akka.ConfigurationException
+import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.pattern.ask
-import scala.reflect.ClassTag
-import com.typesafe.config._
 import akka.routing.RoundRobinRouter
+import akka.util._
+import com.eklavya.scqla.Frame._
+import com.typesafe.config._
+
 import scala.collection.JavaConversions._
+import scala.concurrent.duration._
+import scala.concurrent.{Await, Future, Promise}
+import scala.reflect.ClassTag
 
 object Scqla {
 
@@ -23,6 +24,12 @@ object Scqla {
   val numNodes = cnfg.getInt("nodesToConnect")
 
   val system = ActorSystem("Scqla")
+
+  implicit val ec = try {
+    system.dispatchers.lookup("contexts/scqla-pool")
+  } catch{
+    case _: ConfigurationException => scala.concurrent.ExecutionContext.Implicits.global
+  }
 
   val numConnections = cnfg.getInt("numConnections")
 
@@ -44,7 +51,7 @@ object Scqla {
   def connect = {
     nodes.foreach { node =>
       (0 until numConnections).foreach { i =>
-        val res = Await.result(system.actorSelection(s"/user/receiver-$node-$i") ? ShallWeStart, 8 seconds)
+        Await.result(system.actorSelection(s"/user/receiver-$node-$i") ? ShallWeStart, 8 seconds)
       }
     }
     Await.result(eventListener ? ShallWeStart, 8 seconds)
@@ -64,32 +71,45 @@ object Scqla {
     }
   }
 
-  def query(q: String, consistency: Short = Header.ONE): Future[Either[String, Response]] = (router ? Query(q, consistency)).map {
-    case e: Error => Left(e.e)
-    case x: Response => Right(x)
+  def query(q: String, consistency: Short = Header.ONE): Future[Response] = {
+    val p = Promise[Response]
+    (router ? Query(q, consistency)).map {
+      case e: Error => p.failure(new ErrorException(e))
+      case x: Response => p.success(x)
+    }
+    p.future
   }
 
-  def queryAs[T: ClassTag](q: String, consistency: Short = Header.ONE): Future[Either[String, IndexedSeq[T]]] = query(q, consistency).map(_.fold(
-    error => Left(error),
-    valid => Right(rowsToClass[T](valid.asInstanceOf[ResultRows]))))
+  def queryAs[T: ClassTag](q: String, consistency: Short = Header.ONE): Future[IndexedSeq[T]] = query(q, consistency).map(
+    rr => rowsToClass[T](rr.asInstanceOf[ResultRows]))
 
-  def prepare(q: String): Future[Either[String, Prepared]] = (router ? Prepare(q)).map {
-    case p: Prepared => Right(p)
-    case e: Error => Left(e.e)
+  def prepare(q: String): Future[Prepared] = {
+    val p = Promise[Prepared]
+    (router ? Prepare(q)).map {
+      case e: Error => p.failure(new ErrorException(e))
+      case pre: Prepared => p.success(pre)
+    }
+    p.future
   }
 
-  def execute(bs: ByteString, keeper: ActorRef): Future[Either[String, Response]] = (keeper ? Execute(bs)).map {
-    case e: Error => Left(e.e)
-    case x: Response => Right(x)
+  def execute(bs: ByteString, keeper: ActorRef): Future[Response] = {
+    val p = Promise[Response]
+    (keeper ? Execute(bs)).map {
+      case e: Error => p.failure(new ErrorException(e))
+      case x: Response => p.success(x)
+    }
+    p.future
   }
 
-  def executeGet[T: ClassTag](bs: ByteString, keeper: ActorRef): Future[Either[String, IndexedSeq[T]]] = (keeper ? Execute(bs)).map {
-    case rr: ResultRows => Right(rowsToClass[T](rr))
-    case e: Error => Left(e.e)
+  def executeGet[T: ClassTag](bs: ByteString, keeper: ActorRef): Future[IndexedSeq[T]] = (keeper ? Execute(bs)).map {
+    rr => rowsToClass[T](rr.asInstanceOf[ResultRows])
   }
 }
 
 case class FulFill(stream: Byte, actor: ActorRef)
+
+class ErrorException(error: Error) extends Throwable
+
 case class FulFilled(stream: Byte)
 
 case object ShallWeStart

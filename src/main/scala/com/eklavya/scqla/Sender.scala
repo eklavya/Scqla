@@ -1,14 +1,12 @@
 package com.eklavya.scqla
 
 import java.net.InetSocketAddress
-import akka.actor.{Props, Actor, ActorRef}
-import akka.io.{IO, Tcp}
-import akka.util.ByteString
+
+import akka.actor.{Actor, ActorRef}
 import akka.io.Tcp._
-import Frame._
-import Header._
-import Scqla._
-import com.typesafe.config._
+import akka.io.{IO, Tcp}
+import com.eklavya.scqla.Frame._
+import com.eklavya.scqla.Header._
 
 /**
  * Created by eklavya on 8/2/14.

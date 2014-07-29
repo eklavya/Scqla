@@ -1,7 +1,8 @@
 package com.eklavya.scqla
 
-import EventHandler._
 import java.net.InetAddress
+
+import com.eklavya.scqla.EventHandler._
 
 abstract class Event
 

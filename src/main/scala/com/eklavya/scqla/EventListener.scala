@@ -1,19 +1,12 @@
 package com.eklavya.scqla
 
-import akka.actor.Actor
 import java.net.InetSocketAddress
-import akka.io.Tcp.ConnectionClosed
-import akka.io.Tcp.Register
-import akka.io.Tcp.Received
-import akka.io.Tcp.CommandFailed
-import akka.io.IO
-import akka.actor.ActorRef
-import akka.io.Tcp.Connected
-import akka.io.Tcp.Write
-import akka.io.Tcp.Connect
-import akka.io.Tcp
-import Frame._
-import Header._
+
+import akka.actor.{Actor, ActorRef}
+import akka.io.{IO, Tcp}
+import akka.io.Tcp.{CommandFailed, Connect, Connected, ConnectionClosed, Received, Register, Write}
+import com.eklavya.scqla.Frame._
+import com.eklavya.scqla.Header._
 
 class EventListener(host: String, port: Int) extends Actor {
 
